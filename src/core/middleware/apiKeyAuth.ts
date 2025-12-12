@@ -1,32 +1,26 @@
-// src/core/middleware/apiKeyAuth.ts
-import { Request, RequestHandler } from 'express';
-import { getApiClientByKey, ApiClient } from '../../utils/apiClient';
-import { AppError } from '../errors/AppError';
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../errors/AppError";
+import { getClientByApiKey } from "../../utils/apiClient";
 
-export interface ApiRequest extends Request {
-  apiClient?: ApiClient;
+declare global {
+  namespace Express {
+    interface Request {
+      client?: { id: number; name: string };
+    }
+  }
 }
 
-// Middleware: ใช้กับทุก /api/*
-export const apiKeyAuth: RequestHandler = async (req, _res, next) => {
+export async function apiKeyAuth(req: Request, _res: Response, next: NextFunction) {
   try {
-    const key =
-      (req.headers['x-api-key'] as string | undefined) ||
-      (req.query.api_key as string | undefined) ||
-      (req.query.apiKey as string | undefined);
+    const apiKey = req.header("x-api-key");
+    if (!apiKey) throw new AppError("Missing x-api-key", 401, "API_KEY_MISSING");
 
-    if (!key) {
-      throw AppError.unauthorized('Missing API key');
-    }
+    const client = await getClientByApiKey(apiKey);
+    if (!client) throw new AppError("Invalid API key", 401, "API_KEY_INVALID");
 
-    const client = await getApiClientByKey(key);
-    if (!client) {
-      throw AppError.unauthorized('Invalid API key');
-    }
-
-    (req as ApiRequest).apiClient = client;
+    req.client = { id: client.id, name: client.name };
     next();
-  } catch (err) {
-    next(err);
+  } catch (e) {
+    next(e);
   }
-};
+}

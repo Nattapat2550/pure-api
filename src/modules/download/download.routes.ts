@@ -1,16 +1,22 @@
-import { Router } from 'express';
-import { downloadAndroid, downloadWindows } from './download.service';
+import { Router } from "express";
+import * as service from "./download.service";
 
-const router = Router();
+export const downloadRoutes = Router();
 
-// GET /api/download/windows
-router.get('/windows', (_req, res) => {
-  downloadWindows(res);
+downloadRoutes.get("/windows", (req, res, next) => {
+  try {
+    const filePath = service.getWindowsPath();
+    res.download(filePath, "MyAppSetup.exe");
+  } catch (e) {
+    next(e);
+  }
 });
 
-// GET /api/download/android
-router.get('/android', (_req, res) => {
-  downloadAndroid(res);
+downloadRoutes.get("/android", (req, res, next) => {
+  try {
+    const filePath = service.getAndroidPath();
+    res.download(filePath, "app-release.apk");
+  } catch (e) {
+    next(e);
+  }
 });
-
-export default router;

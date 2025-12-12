@@ -1,74 +1,32 @@
-import { Router } from 'express';
-import multer from 'multer';
-import { jwtAuth } from '../../core/middleware/jwtAuth';
-import { deleteUser, getUserById, updateProfile } from './users.service';
-import { UpdateProfilePayload } from './users.types';
+import { Router } from "express";
+import { z } from "zod";
+import { jwtAuth } from "../../core/middleware/jwtAuth";
+import { AppError } from "../../core/errors/AppError";
+import * as service from "./users.service";
 
-const router = Router();
-const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB
+export const usersRoutes = Router();
 
-// GET /api/users/me
-router.get('/me', jwtAuth, async (req, res, next) => {
+const updateSchema = z.object({
+  username: z.string().min(2).max(50).optional(),
+  profile_picture_url: z.string().min(1).max(2000).optional()
+});
+
+usersRoutes.get("/me", jwtAuth, async (req, res, next) => {
   try {
-    const user = await getUserById((req as any).user.id);
-    if (!user) return res.status(404).json({ error: 'Not found' });
-    res.json(user);
+    const u = await service.getById(req.user!.id);
+    res.json({ ok: true, data: u });
   } catch (e) {
     next(e);
   }
 });
 
-// PUT /api/users/me
-router.put('/me', jwtAuth, async (req, res, next) => {
+usersRoutes.patch("/me", jwtAuth, async (req, res, next) => {
   try {
-    const updated = await updateProfile(
-      (req as any).user.id,
-      req.body as UpdateProfilePayload
-    );
-    res.json(updated);
-  } catch (e) {
+    const body = updateSchema.parse(req.body);
+    const u = await service.updateMe(req.user!.id, body);
+    res.json({ ok: true, data: u });
+  } catch (e: any) {
+    if (e?.name === "ZodError") return next(new AppError("Invalid body", 400, "BAD_REQUEST", e.errors));
     next(e);
   }
 });
-
-// DELETE /api/users/me
-router.delete('/me', jwtAuth, async (req, res, next) => {
-  try {
-    await deleteUser((req as any).user.id);
-    res.status(204).end();
-  } catch (e) {
-    next(e);
-  }
-});
-
-// POST /api/users/me/avatar (multipart form-data)
-router.post(
-  '/me/avatar',
-  jwtAuth,
-  upload.single('avatar'),
-  async (req, res, next) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'Missing avatar file' });
-      }
-      const mime = req.file.mimetype;
-      if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
-      const b64 = req.file.buffer.toString('base64');
-      const dataUrl = `data:${mime};base64,${b64}`;
-
-      const updated = await updateProfile((req as any).user.id, {
-        profile_picture_url: dataUrl
-      });
-      res.json({
-        ok: true,
-        profile_picture_url: updated.profile_picture_url
-      });
-    } catch (e) {
-      next(e);
-    }
-  }
-);
-
-export default router;

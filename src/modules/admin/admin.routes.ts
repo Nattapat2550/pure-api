@@ -1,148 +1,72 @@
-import { Router } from 'express';
-import multer from 'multer';
-import { pool } from '../../config/db';
-import { jwtAuth, requireAdmin } from '../../core/middleware/jwtAuth';
-import {
-  createCarouselItem,
-  deleteCarouselItem,
-  listCarouselItems,
-  updateCarouselItem
-} from '../carousel/carousel.service';
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../../config/db";
+import { jwtAuth, requireAdmin } from "../../core/middleware/jwtAuth";
+import { AppError } from "../../core/errors/AppError";
+import { invalidateClientCache } from "../../utils/apiClient";
 
-const router = Router();
-const upload = multer({ limits: { fileSize: 4 * 1024 * 1024 } });
+export const adminRoutes = Router();
 
-// GET /api/admin/users
-router.get('/users', jwtAuth, requireAdmin, async (_req, res, next) => {
+// ทุก admin route ต้องเป็น admin
+adminRoutes.use(jwtAuth, requireAdmin);
+
+// list api clients
+adminRoutes.get("/clients", async (_req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, username, email, role, profile_picture_url, is_email_verified,
-              created_at, updated_at
-       FROM users
+    const { rows } = await db.query(
+      `SELECT id, name, api_key, is_active, created_at
+       FROM api_clients
        ORDER BY id ASC`
     );
-    res.json(rows);
+    res.json({ ok: true, data: rows });
   } catch (e) {
     next(e);
   }
 });
 
-// PUT /api/admin/users/:id
-router.put('/users/:id', jwtAuth, requireAdmin, async (req, res, next) => {
+const createClientSchema = z.object({
+  name: z.string().min(2).max(100),
+  api_key: z.string().min(8).max(255)
+});
+
+adminRoutes.post("/clients", async (req, res, next) => {
+  try {
+    const body = createClientSchema.parse(req.body);
+    const { rows } = await db.query(
+      `INSERT INTO api_clients(name, api_key, is_active, created_at)
+       VALUES ($1,$2,TRUE,NOW())
+       RETURNING id, name, api_key, is_active, created_at`,
+      [body.name, body.api_key]
+    );
+    invalidateClientCache();
+    res.json({ ok: true, data: rows[0] });
+  } catch (e: any) {
+    if (e?.name === "ZodError") return next(new AppError("Invalid body", 400, "BAD_REQUEST", e.errors));
+    next(e);
+  }
+});
+
+const setActiveSchema = z.object({ is_active: z.boolean() });
+
+adminRoutes.patch("/clients/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const { username, email, role, profile_picture_url } = req.body ?? {};
-    const { rows } = await pool.query(
-      `UPDATE users SET
-         username = COALESCE($2, username),
-         email = COALESCE($3, email),
-         role = COALESCE($4, role),
-         profile_picture_url = COALESCE($5, profile_picture_url)
-       WHERE id=$1
-       RETURNING id, username, email, role, profile_picture_url, is_email_verified,
-                 created_at, updated_at`,
-      [id, username ?? null, email ?? null, role ?? null, profile_picture_url ?? null]
+    if (!Number.isFinite(id)) throw new AppError("Invalid id", 400, "BAD_REQUEST");
+    const body = setActiveSchema.parse(req.body);
+
+    const { rows } = await db.query(
+      `UPDATE api_clients
+       SET is_active = $2
+       WHERE id = $1
+       RETURNING id, name, api_key, is_active, created_at`,
+      [id, body.is_active]
     );
-    const row = rows[0];
-    if (!row) return res.status(404).json({ error: 'Not found' });
-    res.json(row);
-  } catch (e) {
+    if (!rows[0]) throw new AppError("Client not found", 404, "CLIENT_NOT_FOUND");
+
+    invalidateClientCache();
+    res.json({ ok: true, data: rows[0] });
+  } catch (e: any) {
+    if (e?.name === "ZodError") return next(new AppError("Invalid body", 400, "BAD_REQUEST", e.errors));
     next(e);
   }
 });
-
-// ---- Carousel (admin) ----
-
-// GET /api/admin/carousel
-router.get('/carousel', jwtAuth, requireAdmin, async (_req, res, next) => {
-  try {
-    const items = await listCarouselItems();
-    res.json(items);
-  } catch (e) {
-    next(e);
-  }
-});
-
-// POST /api/admin/carousel
-router.post(
-  '/carousel',
-  jwtAuth,
-  requireAdmin,
-  upload.single('image'),
-  async (req, res, next) => {
-    try {
-      const { item_index, title, subtitle, description } = req.body ?? {};
-      if (!req.file) {
-        return res.status(400).json({ error: 'Missing image' });
-      }
-      const mime = req.file.mimetype;
-      if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
-      const dataUrl = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
-
-      const created = await createCarouselItem({
-        item_index: Number(item_index ?? 0),
-        title,
-        subtitle,
-        description,
-        image_dataurl: dataUrl
-      });
-      res.status(201).json(created);
-    } catch (e) {
-      next(e);
-    }
-  }
-);
-
-// PUT /api/admin/carousel/:id
-router.put(
-  '/carousel/:id',
-  jwtAuth,
-  requireAdmin,
-  upload.single('image'),
-  async (req, res, next) => {
-    try {
-      const id = Number(req.params.id);
-      const { item_index, title, subtitle, description } = req.body ?? {};
-      let image_dataurl: string | undefined;
-      if (req.file) {
-        const mime = req.file.mimetype;
-        if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
-          return res.status(400).json({ error: 'Unsupported file type' });
-        }
-        image_dataurl = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
-      }
-
-      const updated = await updateCarouselItem(id, {
-        item_index: item_index !== undefined ? Number(item_index) : undefined,
-        title,
-        subtitle,
-        description,
-        image_dataurl
-      });
-      if (!updated) return res.status(404).json({ error: 'Not found' });
-      res.json(updated);
-    } catch (e) {
-      next(e);
-    }
-  }
-);
-
-// DELETE /api/admin/carousel/:id
-router.delete(
-  '/carousel/:id',
-  jwtAuth,
-  requireAdmin,
-  async (req, res, next) => {
-    try {
-      const id = Number(req.params.id);
-      await deleteCarouselItem(id);
-      res.status(204).end();
-    } catch (e) {
-      next(e);
-    }
-  }
-);
-
-export default router;

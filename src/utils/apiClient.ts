@@ -1,29 +1,39 @@
-// src/utils/apiClient.ts
-import { pool } from '../config/db';
+import { db } from "../config/db";
 
-export interface ApiClient {
+type ApiClientRow = {
   id: number;
   name: string;
-  apiKey: string;
-  isActive: boolean;
-}
+  api_key: string;
+  is_active: boolean;
+};
 
-export async function getApiClientByKey(apiKey: string): Promise<ApiClient | null> {
-  if (!apiKey) return null;
+let cache = new Map<string, { id: number; name: string }>();
+let lastLoad = 0;
+const TTL_MS = 60_000;
 
-  const { rows } = await pool.query(
-    `SELECT id,
-            name,
-            api_key   AS "apiKey",
-            is_active AS "isActive"
+async function reloadIfNeeded() {
+  const now = Date.now();
+  if (now - lastLoad < TTL_MS && cache.size > 0) return;
+
+  const { rows } = await db.query<ApiClientRow>(
+    `SELECT id, name, api_key, is_active
      FROM api_clients
-     WHERE api_key = $1`,
-    [apiKey]
+     WHERE is_active = TRUE`
   );
 
-  const client = rows[0];
-  if (!client) return null;
-  if (!client.isActive) return null;
+  const next = new Map<string, { id: number; name: string }>();
+  for (const r of rows) {
+    next.set(r.api_key, { id: r.id, name: r.name });
+  }
+  cache = next;
+  lastLoad = now;
+}
 
-  return client;
+export async function getClientByApiKey(apiKey: string) {
+  await reloadIfNeeded();
+  return cache.get(apiKey) || null;
+}
+
+export function invalidateClientCache() {
+  lastLoad = 0;
 }

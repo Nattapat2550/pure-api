@@ -1,12 +1,16 @@
-import { Pool } from 'pg';
-import { env } from './env';
+import { Pool } from "pg";
+import { env } from "./env";
 
-export const pool = new Pool({
-  connectionString: env.databaseUrl,
-  ssl: env.nodeEnv === 'production' ? { rejectUnauthorized: false } : undefined,
+export const db = new Pool({
+  connectionString: env.DATABASE_URL,
+  ssl:
+    env.NODE_ENV === "production" && env.DB_SSL
+      ? { rejectUnauthorized: false }
+      : undefined
 });
 
-pool.on('error', (err: Error) => {
-  console.error('Unexpected PG error', err);
-  process.exit(1);
+// log ตอน pool error
+db.on("error", (err: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error("[db] unexpected error", err);
 });

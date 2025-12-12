@@ -1,29 +1,22 @@
-export interface RegisterPayload {
-  email: string;
-}
-
-export interface VerifyCodePayload {
-  email: string;
-  code: string;
-}
-
-export interface CompleteProfilePayload {
-  email: string;
-  username: string;
-  password: string;
-}
-
-export interface LoginPayload {
+export type RegisterBody = {
+  username?: string;
   email: string;
   password: string;
-  remember?: boolean;
-}
+};
 
-export interface ForgotPasswordPayload {
+export type LoginBody = {
   email: string;
-}
+  password: string;
+};
 
-export interface ResetPasswordPayload {
+export type AuthResponse = {
   token: string;
-  password: string;
-}
+  user: {
+    id: number;
+    email: string;
+    username: string | null;
+    role: "user" | "admin";
+    profile_picture_url: string | null;
+    is_email_verified: boolean;
+  };
+};

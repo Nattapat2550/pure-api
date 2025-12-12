@@ -1,31 +1,29 @@
-import { Router } from 'express';
-import { jwtAuth, requireAdmin } from '../../core/middleware/jwtAuth';
-import { listHomepageContent, upsertHomepageSection } from './homepage.service';
+import { Router } from "express";
+import { z } from "zod";
+import { AppError } from "../../core/errors/AppError";
+import { jwtAuth, requireAdmin } from "../../core/middleware/jwtAuth";
+import * as service from "./homepage.service";
 
-const router = Router();
+export const homepageRoutes = Router();
 
-// GET /api/homepage
-router.get('/', async (_req, res, next) => {
+homepageRoutes.get("/:section", async (req, res, next) => {
   try {
-    const rows = await listHomepageContent();
-    res.json(rows);
+    const out = await service.getSection(req.params.section);
+    res.json({ ok: true, data: out });
   } catch (e) {
     next(e);
   }
 });
 
-// PUT /api/homepage
-router.put('/', jwtAuth, requireAdmin, async (req, res, next) => {
+const upsertSchema = z.object({ content: z.string().min(1).max(50000) });
+
+homepageRoutes.put("/:section", jwtAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { section_name, content } = req.body ?? {};
-    if (!section_name) {
-      return res.status(400).json({ error: 'Missing section_name' });
-    }
-    const row = await upsertHomepageSection(section_name, content ?? '');
-    res.json(row);
-  } catch (e) {
+    const body = upsertSchema.parse(req.body);
+    const out = await service.upsertSection(req.params.section, body.content);
+    res.json({ ok: true, data: out });
+  } catch (e: any) {
+    if (e?.name === "ZodError") return next(new AppError("Invalid body", 400, "BAD_REQUEST", e.errors));
     next(e);
   }
 });
-
-export default router;
