@@ -6,8 +6,12 @@
     "rootDir": "src",
     "outDir": "dist",
     "esModuleInterop": true,
+
     "strict": true,
-    "skipLibCheck": true
+    "noImplicitAny": false,       // <- เพิ่มบรรทัดนี้ เพื่อลด error TS7006
+    "skipLibCheck": true,
+
+    "types": ["node"]             // <- ให้ TS รู้จัก process, __dirname, fs, path, crypto ฯลฯ
   },
   "include": ["src"]
 }

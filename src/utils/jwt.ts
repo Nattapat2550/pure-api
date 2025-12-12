@@ -7,7 +7,6 @@ export interface JwtPayload {
 }
 
 export function signToken(payload: JwtPayload): string {
-  // ถ้าอยากใช้ JWT_EXPIRES_IN จาก env ก็เปลี่ยนเป็น process.env.JWT_EXPIRES_IN ได้
   return jwt.sign(payload, env.jwtSecret, { expiresIn: '30d' });
 }
 
