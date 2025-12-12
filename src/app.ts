@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import compression from "compression";
 import cors from "cors";
@@ -25,16 +25,18 @@ app.use(compression());
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// CORS: จริงๆ pure-api ควรถูกเรียกจาก backend (server-to-server) มากกว่า
-// แต่เผื่อ dev/test ให้เปิดเฉพาะ origin ที่กำหนด
+// CORS: ปกติ pure-api ควรถูกเรียกจาก backend (server-to-server) อยู่แล้ว
 const allowed = (env.ALLOWED_ORIGINS || "")
   .split(",")
-  .map(s => s.trim())
+  .map((s) => s.trim())
   .filter(Boolean);
 
 app.use(
   cors({
-    origin: (origin, cb) => {
+    origin: (
+      origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void
+    ) => {
       if (!origin) return cb(null, true);
       if (allowed.length === 0) return cb(null, false);
       if (allowed.includes(origin)) return cb(null, true);
@@ -44,7 +46,7 @@ app.use(
   })
 );
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 // จำกัด brute force เฉพาะ auth
 const authLimiter = rateLimit({
@@ -54,7 +56,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// ====== IMPORTANT ======
 // บังคับทุก /api ต้องมี x-api-key (backend เท่านั้นที่ถือ key)
 app.use("/api", apiKeyAuth);
 
