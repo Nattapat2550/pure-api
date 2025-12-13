@@ -34,6 +34,11 @@ export async function createUserByEmail(email: string) {
   return rows[0];
 }
 
+export async function deleteUser(id: number) {
+  await db.query('DELETE FROM users WHERE id=$1', [id]);
+  return true;
+}
+
 export async function storeVerificationCode(userId: number, code: string, expiresAt: string) {
   await db.query('DELETE FROM verification_codes WHERE user_id=$1', [userId]);
   const { rows } = await db.query(

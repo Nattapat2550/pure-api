@@ -58,6 +58,14 @@ internalRoutes.post("/set-oauth-user", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+internalRoutes.post("/delete-user", async (req, res, next) => {
+  try {
+    const { id } = req.body;
+    await service.deleteUser(id);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 internalRoutes.post("/create-reset-token", async (req, res, next) => {
   try {
     const { email, token, expiresAt } = req.body;
