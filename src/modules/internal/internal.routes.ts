@@ -81,3 +81,58 @@ internalRoutes.post("/set-password", async (req, res, next) => {
     res.json({ ok: true, data: user });
   } catch (e) { next(e); }
 });
+
+// Homepage
+internalRoutes.get("/homepage/list", async (req, res, next) => {
+  try {
+    const data = await service.getHomepageContent();
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+internalRoutes.post("/homepage/update", async (req, res, next) => {
+  try {
+    const { section_name, content } = req.body;
+    const data = await service.updateHomepageContent(section_name, content);
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+
+// Carousel
+internalRoutes.get("/carousel/list", async (req, res, next) => {
+  try {
+    const data = await service.listCarouselItems();
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+internalRoutes.post("/carousel/create", async (req, res, next) => {
+  try {
+    const data = await service.createCarouselItem(req.body);
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+internalRoutes.post("/carousel/update", async (req, res, next) => {
+  try {
+    const data = await service.updateCarouselItem(req.body);
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+internalRoutes.post("/carousel/delete", async (req, res, next) => {
+  try {
+    await service.deleteCarouselItem(req.body.id);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Admin Users
+internalRoutes.get("/admin/users", async (req, res, next) => {
+  try {
+    const data = await service.getAllUsers();
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});
+internalRoutes.post("/admin/users/update", async (req, res, next) => {
+  try {
+    const data = await service.adminUpdateUser(req.body);
+    res.json({ ok: true, data });
+  } catch (e) { next(e); }
+});

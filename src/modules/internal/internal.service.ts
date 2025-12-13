@@ -128,3 +128,78 @@ export async function setPassword(userId: number, newPassword: string) {
   const { rows } = await db.query('UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING *', [userId, hash]);
   return rows[0];
 }
+
+export async function getHomepageContent() {
+  const { rows } = await db.query('SELECT section_name, content FROM homepage_content ORDER BY section_name ASC');
+  return rows;
+}
+
+export async function updateHomepageContent(section_name: string, content: string) {
+  const { rows } = await db.query(
+    `INSERT INTO homepage_content (section_name, content)
+     VALUES ($1,$2)
+     ON CONFLICT (section_name) DO UPDATE SET content=EXCLUDED.content
+     RETURNING section_name, content`,
+    [section_name, content]
+  );
+  return rows[0];
+}
+
+// --- CAROUSEL ---
+export async function listCarouselItems() {
+  const { rows } = await db.query(
+    `SELECT id, item_index, title, subtitle, description, image_dataurl
+     FROM carousel_items ORDER BY item_index ASC, id ASC`
+  );
+  return rows;
+}
+
+export async function createCarouselItem(d: any) {
+  const { rows } = await db.query(
+    `INSERT INTO carousel_items (item_index, title, subtitle, description, image_dataurl)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [d.itemIndex ?? 0, d.title, d.subtitle, d.description, d.imageDataUrl]
+  );
+  return rows[0];
+}
+
+export async function updateCarouselItem(d: any) {
+  const { rows } = await db.query(
+    `UPDATE carousel_items
+     SET item_index = COALESCE($2, item_index),
+         title = COALESCE($3, title),
+         subtitle = COALESCE($4, subtitle),
+         description = COALESCE($5, description),
+         image_dataurl = COALESCE($6, image_dataurl)
+     WHERE id=$1 RETURNING *`,
+    [d.id, d.itemIndex, d.title, d.subtitle, d.description, d.imageDataUrl]
+  );
+  return rows[0];
+}
+
+export async function deleteCarouselItem(id: number) {
+  await db.query('DELETE FROM carousel_items WHERE id=$1', [id]);
+  return true;
+}
+
+// --- ADMIN USERS ---
+export async function getAllUsers() {
+  const { rows } = await db.query(
+    `SELECT id, username, email, role, profile_picture_url, is_email_verified, created_at, updated_at FROM users ORDER BY id ASC`
+  );
+  return rows;
+}
+
+export async function adminUpdateUser(d: any) {
+  const { rows } = await db.query(
+    `UPDATE users SET
+       username=COALESCE($2, username),
+       email=COALESCE($3, email),
+       role=COALESCE($4, role),
+       profile_picture_url=COALESCE($5, profile_picture_url)
+     WHERE id=$1
+     RETURNING id, username, email, role, profile_picture_url, is_email_verified, created_at, updated_at`,
+    [d.id, d.username, d.email, d.role, d.profile_picture_url]
+  );
+  return rows[0];
+}
