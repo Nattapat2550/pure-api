@@ -3,6 +3,7 @@ import helmet from "helmet";
 import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import { internalRoutes } from "./modules/internal/internal.routes";
 
 import { env } from "./config/env";
 import { apiKeyAuth } from "./core/middleware/apiKeyAuth";
@@ -66,6 +67,7 @@ app.use("/api/homepage", homepageRoutes);
 app.use("/api/carousel", carouselRoutes);
 app.use("/api/download", downloadRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/internal", internalRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
