@@ -76,6 +76,88 @@ export async function login(input: LoginBody): Promise<AuthResponse> {
   };
 }
 
+export async function oauthGoogle(input: { email: string; oauthId: string; username?: string; pictureUrl?: string | null }): Promise<AuthResponse> {
+  const email = input.email.toLowerCase();
+  const provider = "google";
+
+  // 1) try by oauth provider/id
+  const byOAuth = await db.query<UserRow>(
+    `SELECT id, username, email, password_hash, role, profile_picture_url, is_email_verified
+     FROM users
+     WHERE oauth_provider=$1 AND oauth_id=$2`,
+    [provider, input.oauthId]
+  );
+
+  let u = byOAuth.rows[0];
+
+  if (u) {
+    // update optional fields
+    const { rows } = await db.query<UserRow>(
+      `UPDATE users SET
+         email = COALESCE($2, email),
+         is_email_verified = TRUE,
+         profile_picture_url = COALESCE($3, profile_picture_url),
+         username = COALESCE(username, $4)
+       WHERE id=$1
+       RETURNING id, username, email, password_hash, role, profile_picture_url, is_email_verified`,
+      [u.id, email, input.pictureUrl ?? null, input.username ?? null]
+    );
+    u = rows[0];
+  } else {
+    // 2) try by email
+    const byEmail = await db.query<UserRow>(
+      `SELECT id, username, email, password_hash, role, profile_picture_url, is_email_verified
+       FROM users
+       WHERE email=$1`,
+      [email]
+    );
+
+    u = byEmail.rows[0];
+
+    if (u) {
+      const { rows } = await db.query<UserRow>(
+        `UPDATE users SET
+           oauth_provider=$2,
+           oauth_id=$3,
+           is_email_verified=TRUE,
+           profile_picture_url = COALESCE($4, profile_picture_url),
+           username = COALESCE(username, $5)
+         WHERE id=$1
+         RETURNING id, username, email, password_hash, role, profile_picture_url, is_email_verified`,
+        [u.id, provider, input.oauthId, input.pictureUrl ?? null, input.username ?? null]
+      );
+      u = rows[0];
+    } else {
+      // 3) create new user
+      const username = input.username || email.split("@")[0];
+
+      const { rows } = await db.query<UserRow>(
+        `INSERT INTO users (username, email, password_hash, role, is_email_verified, oauth_provider, oauth_id, profile_picture_url)
+         VALUES ($1,$2,NULL,'user', TRUE, $3, $4, $5)
+         RETURNING id, username, email, password_hash, role, profile_picture_url, is_email_verified`,
+        [username, email, provider, input.oauthId, input.pictureUrl ?? null]
+      );
+      u = rows[0];
+    }
+  }
+
+  if (!u) throw new AppError("OAuth login failed", 401, "OAUTH_LOGIN_FAILED");
+
+  const token = signJwt({ sub: u.id, role: u.role, email: u.email });
+
+  return {
+    token,
+    user: {
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      role: u.role,
+      profile_picture_url: u.profile_picture_url,
+      is_email_verified: u.is_email_verified
+    }
+  };
+}
+
 export async function getMe(userId: number) {
   const { rows } = await db.query<Omit<UserRow, "password_hash">>(
     `SELECT id, username, email, role, profile_picture_url, is_email_verified

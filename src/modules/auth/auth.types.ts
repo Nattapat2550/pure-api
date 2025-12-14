@@ -20,3 +20,10 @@ export type AuthResponse = {
     is_email_verified: boolean;
   };
 };
+
+export type OAuthGoogleBody = {
+  email: string;
+  oauthId: string;
+  username?: string;
+  pictureUrl?: string | null;
+};
